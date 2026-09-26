@@ -30,8 +30,8 @@ export function dayDate(startDate: string | null, index: number) {
  * Where the group is in the itinerary. The "current" stop is the first item not yet
  * checked off (the place you're at or heading to); "next" is the one after it.
  */
-export function progress<I extends ItineraryItem, D extends ItineraryDay<I>>(days: D[]) {
-  const flat = days.flatMap((day, dayIndex) => day.items.map((item) => ({ item, day, dayIndex })));
+export function progress<D extends ItineraryDay>(days: D[]) {
+  const flat = days.flatMap((day, dayIndex) => day.items.map((item) => ({ item: item as D["items"][number], day, dayIndex })));
   const i = flat.findIndex((f) => !f.item.completedAt);
   return {
     total: flat.length,

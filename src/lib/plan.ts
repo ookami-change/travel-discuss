@@ -57,8 +57,8 @@ export async function autoSnapshot(tx: Tx, tripId: string, memberId: string) {
     .orderBy(desc(planVersions.createdAt))
     .limit(1);
   if (last && Date.now() - last.createdAt.getTime() < AUTO_SNAPSHOT_MINUTES * 60000) return;
-  const [anyDay] = await tx.select({ id: planDays.id }).from(planDays).where(eq(planDays.tripId, tripId)).limit(1);
-  if (!anyDay) return;
+  const [anyItem] = await tx.select({ id: planItems.id }).from(planItems).where(eq(planItems.tripId, tripId)).limit(1);
+  if (!anyItem) return;
   await saveVersion(tx, tripId, memberId, "自动保存");
 }
 

@@ -1,4 +1,7 @@
-import { ZodError, type ZodType } from "zod";
+import { ZodError, z, type ZodType } from "zod";
+
+// Every route imports this module, so validation messages are Chinese everywhere.
+z.config(z.locales.zhCN());
 
 export class HttpError extends Error {
   constructor(

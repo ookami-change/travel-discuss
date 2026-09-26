@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { SUGGESTION_TYPES, TRANSPORT_MODES, type SuggestionType, type TransportMode } from "../lib/constants";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -57,8 +58,7 @@ export type Place = {
   poiId?: string | null;
 };
 
-export const SUGGESTION_TYPES = ["sight", "food", "lodging", "transport", "activity", "other"] as const;
-export type SuggestionType = (typeof SUGGESTION_TYPES)[number];
+export { SUGGESTION_TYPES, TRANSPORT_MODES, type SuggestionType, type TransportMode };
 
 export const suggestions = pgTable(
   "suggestions",
@@ -103,8 +103,6 @@ export const comments = pgTable(
 );
 
 export type Lodging = Place & { note?: string | null };
-export const TRANSPORT_MODES = ["walk", "metro", "bus", "taxi", "drive", "train", "flight", "boat", "other"] as const;
-export type TransportMode = (typeof TRANSPORT_MODES)[number];
 export type Transport = { mode: TransportMode; minutes?: number | null; note?: string | null };
 
 export const planDays = pgTable(
