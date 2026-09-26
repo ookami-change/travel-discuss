@@ -90,7 +90,8 @@ example.com {
 - 地址：https://www.twincle.com.cn/travel （腾讯云上海 `124.223.185.175`，由共享 Caddy 容器 `a-share-web` 反代，不剥前缀）
 - 容器：`travel-app`（Next.js，内存上限 512M）和 `travel-db`（postgres:17-alpine，内存上限 256M），都在 docker 网络 `a-share-net` 里，不映射宿主机端口
 - 服务器目录 `/opt/travel-discuss/`：`app.env` 和 `db.env`（root 600，存放密钥和数据库密码，不要打印出来）、`pgdata/`（数据库数据）、`releases/<rev>/`（构建镜像用的源码）
-- Caddy 配置段：在 `/opt/a-share-sector-pilot/deploy/Caddyfile` 里搜 `travel-discuss`；部署前的备份是 `Caddyfile.before-travel-20260926144202`
+- Caddy 配置段：在 `/opt/a-share-sector-pilot/deploy/Caddyfile` 里搜 `travel-discuss`。裸域名和裸 IP 访问都会 307 跳到 `https://www.twincle.com.cn`，因为 COS 跨域只放行 www，cookie 也按域名隔离。备份：`Caddyfile.before-travel-20260926144202`（接入前）、`Caddyfile.before-travel-www-20260926145408`（加裸域名跳转前）
+- COS 跨域（CORS）规则在腾讯云控制台配置，Origin 只放行 `https://www.twincle.com.cn`
 
 ```bash
 deploy/twincle.sh          # 在服务器上构建当前 HEAD 并替换 travel-app（数据库不动）
