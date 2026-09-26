@@ -3,12 +3,17 @@
 # node:22-alpine below with a mirrored image (e.g. ccr.ccs.tencentyun.com/library/node:22-alpine).
 FROM node:22-alpine AS deps
 WORKDIR /app
+# Optional npm mirror, e.g. https://registry.npmmirror.com for servers in mainland China.
+ARG NPM_REGISTRY=""
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY:-https://registry.npmjs.org}
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN if [ -n "$NPM_REGISTRY" ]; then pnpm config set registry "$NPM_REGISTRY"; fi && pnpm install --frozen-lockfile
 
 FROM node:22-alpine AS build
 WORKDIR /app
+ARG NPM_REGISTRY=""
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY:-https://registry.npmjs.org}
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

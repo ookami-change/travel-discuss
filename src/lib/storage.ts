@@ -11,10 +11,20 @@ export function storageConfigured() {
   return Boolean(bucket && process.env.S3_ENDPOINT && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY);
 }
 
+/**
+ * COS's console shows the bucket domain (https://<bucket>.cos.<region>.myqcloud.com); the SDK
+ * wants the service endpoint and adds the bucket itself. Accept either.
+ */
+export function serviceEndpoint(endpoint: string, bucketName: string) {
+  const url = new URL(endpoint);
+  if (url.hostname.startsWith(`${bucketName}.`)) url.hostname = url.hostname.slice(bucketName.length + 1);
+  return url.origin;
+}
+
 function client() {
   if (!storageConfigured()) throw new HttpError(503, "还没有配置文件存储（S3_* 环境变量）");
   g.s3 ??= new S3Client({
-    endpoint: process.env.S3_ENDPOINT,
+    endpoint: serviceEndpoint(process.env.S3_ENDPOINT!, bucket!),
     region: process.env.S3_REGION || "ap-guangzhou",
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
     credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID!, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY! },
