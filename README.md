@@ -85,6 +85,22 @@ example.com {
 }
 ```
 
+## 线上部署（twincle）
+
+- 地址：https://www.twincle.com.cn/travel （腾讯云上海 `124.223.185.175`，由共享 Caddy 容器 `a-share-web` 反代，不剥前缀）
+- 容器：`travel-app`（Next.js，内存上限 512M）和 `travel-db`（postgres:17-alpine，内存上限 256M），都在 docker 网络 `a-share-net` 里，不映射宿主机端口
+- 服务器目录 `/opt/travel-discuss/`：`app.env` 和 `db.env`（root 600，存放密钥和数据库密码，不要打印出来）、`pgdata/`（数据库数据）、`releases/<rev>/`（构建镜像用的源码）
+- Caddy 配置段：在 `/opt/a-share-sector-pilot/deploy/Caddyfile` 里搜 `travel-discuss`；部署前的备份是 `Caddyfile.before-travel-20260926144202`
+
+```bash
+deploy/twincle.sh          # 在服务器上构建当前 HEAD 并替换 travel-app（数据库不动）
+deploy/twincle.sh --keys   # 同时把 .env.local 里的高德/AI/COS Key 同步到服务器
+ssh root@124.223.185.175 docker logs --tail 50 travel-app      # 查看日志
+ssh root@124.223.185.175 docker images travel-discuss          # 旧镜像，用于回滚
+```
+
+回滚：`docker rm -f travel-app`，再用旧的 tag 按脚本里同样的 `docker run` 参数重新启动。
+
 ## 设计要点
 
 - **身份**：邀请链接 + 昵称加入，每次旅行单独一个 httpOnly cookie。换设备时用「昵称 + 4 位 PIN」找回，连续错 5 次锁定 15 分钟。创建者是管理员，可以重置邀请链接、移出成员。
