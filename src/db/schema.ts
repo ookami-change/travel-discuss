@@ -181,15 +181,21 @@ export const planVersions = pgTable(
   (t) => [index("plan_versions_trip").on(t.tripId, t.createdAt)],
 );
 
+export type DraftMode = "fresh" | "adjust";
+
 export const aiDrafts = pgTable("ai_drafts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tripId: uuid("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
   createdBy: uuid("created_by").notNull().references(() => members.id),
   status: text("status").$type<"pending" | "ready" | "failed" | "applied" | "discarded">().notNull(),
+  /** fresh = rebuild from all suggestions; adjust = minimal changes to the current plan. */
+  mode: text("mode").$type<DraftMode>().notNull().default("fresh"),
   instructions: text("instructions"),
   snapshot: jsonb("snapshot").$type<PlanSnapshot>(),
   summary: text("summary"),
   error: text("error"),
+  /** Set when someone hand-edits the draft before adopting it. */
+  editedBy: uuid("edited_by").references(() => members.id),
   createdAt: createdAt(),
 });
 

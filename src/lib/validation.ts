@@ -52,3 +52,20 @@ export const itemInput = z.object({
   suggestionId: z.string().uuid().nullish().transform((v) => v ?? null),
   ...placeFields,
 });
+
+const optId = z.string().uuid().optional().catch(undefined);
+
+/** A whole plan as edited client-side (hand-tuning an AI draft). */
+export const planSnapshot = z.object({
+  days: z
+    .array(
+      z.object({
+        id: optId,
+        title: optText(100),
+        lodging,
+        items: z.array(itemInput.extend({ id: optId })).max(50),
+      }),
+    )
+    .min(1, "至少要有一天")
+    .max(60),
+});

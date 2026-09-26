@@ -68,9 +68,13 @@ export type Version = {
   snapshot: PlanSnapshot;
 };
 
+export type SnapshotItem = PlanSnapshot["days"][number]["items"][number];
+
 export type Draft = {
   id: string;
   status: "pending" | "ready" | "failed" | "applied" | "discarded";
+  mode: "fresh" | "adjust";
+  editedBy: string | null;
   instructions: string | null;
   snapshot: PlanSnapshot | null;
   summary: string | null;
