@@ -13,11 +13,15 @@ import { optText } from "@/lib/validation";
 
 type Ctx = RouteContext<"/api/trips/[id]/plan/drafts">;
 
+const STALE_MS = 5 * 60 * 1000;
+
 export const GET = route(async (_req, ctx: Ctx) => {
   const { id } = await ctx.params;
   await requireMember(id);
   const [latest] = await db.select().from(aiDrafts).where(eq(aiDrafts.tripId, id)).orderBy(desc(aiDrafts.createdAt)).limit(1);
-  return ok({ enabled: aiConfigured(), latest: latest ?? null });
+  // A pending draft this old means the server restarted mid-generation.
+  const stale = latest?.status === "pending" && Date.now() - latest.createdAt.getTime() > STALE_MS;
+  return ok({ enabled: aiConfigured(), latest: stale ? { ...latest, status: "failed", error: "生成超时，请重试" } : (latest ?? null) });
 });
 
 export const POST = route(async (req, ctx: Ctx) => {
@@ -28,7 +32,7 @@ export const POST = route(async (req, ctx: Ctx) => {
   const [running] = await db
     .select({ id: aiDrafts.id })
     .from(aiDrafts)
-    .where(and(eq(aiDrafts.tripId, id), eq(aiDrafts.status, "pending"), gt(aiDrafts.createdAt, new Date(Date.now() - 5 * 60000))));
+    .where(and(eq(aiDrafts.tripId, id), eq(aiDrafts.status, "pending"), gt(aiDrafts.createdAt, new Date(Date.now() - STALE_MS))));
   if (running) throw new HttpError(409, "AI 正在生成方案，请稍等");
   rateLimit(`draft:${id}`, 10, 60 * 60 * 1000);
   const [draft] = await db.insert(aiDrafts).values({ tripId: id, createdBy: me.id, status: "pending", instructions }).returning();
