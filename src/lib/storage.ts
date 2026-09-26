@@ -1,4 +1,4 @@
-import { DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { HttpError } from "./http";
 
@@ -70,7 +70,11 @@ export async function objectSize(key: string) {
   }
 }
 
+/**
+ * One request per key: COS requires Content-MD5 on multi-object delete, which current AWS SDKs
+ * no longer send (they use CRC32). We only ever delete an original + thumbnail at once anyway.
+ */
 export async function deleteObjects(keys: string[]) {
   if (!keys.length || !storageConfigured()) return;
-  await client().send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys.map((Key) => ({ Key })) } }));
+  await Promise.all(keys.map((Key) => client().send(new DeleteObjectCommand({ Bucket: bucket, Key }))));
 }

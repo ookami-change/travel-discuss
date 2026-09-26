@@ -8,7 +8,9 @@ import { HttpError, forbidden, notFound, unauthorized } from "./http";
 export const MAX_PIN_ATTEMPTS = 5;
 export const PIN_LOCK_MINUTES = 15;
 
-// One cookie per trip, so a device can be a member of several trips at once.
+// One cookie per trip, so a device can be a member of several trips at once. Scoped to the
+// app's sub-path so other apps on the same domain never receive it.
+const COOKIE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/";
 const cookieName = (tripId: string) => `td_${tripId.replaceAll("-", "")}`;
 
 export type Member = typeof members.$inferSelect;
@@ -21,7 +23,7 @@ export async function startSession(tx: Tx, member: Pick<Member, "id" | "tripId">
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.COOKIE_SECURE === "true",
-    path: "/",
+    path: COOKIE_PATH,
     maxAge: 60 * 60 * 24 * 365,
   });
 }
@@ -30,7 +32,7 @@ export async function endSession(tripId: string) {
   const jar = await cookies();
   const token = jar.get(cookieName(tripId))?.value;
   if (token) await db.delete(sessions).where(eq(sessions.tokenHash, sha256(token)));
-  jar.delete(cookieName(tripId));
+  jar.delete({ name: cookieName(tripId), path: COOKIE_PATH });
 }
 
 export async function currentMember(tripId: string): Promise<Member | null> {

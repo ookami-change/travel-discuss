@@ -37,8 +37,9 @@ export const DELETE = route(async (_req, ctx: Ctx) => {
   const me = await requireMember(id);
   const m = await findMedia(id, mediaId);
   assertOwner(m, me);
-  await db.delete(media).where(eq(media.id, m.id));
+  // Files first: if storage fails the row stays, so the delete can be retried instead of orphaning objects.
   await deleteObjects([m.objectKey, ...(m.thumbKey ? [m.thumbKey] : [])]);
+  await db.delete(media).where(eq(media.id, m.id));
   emit(id, "media");
   return ok();
 });
