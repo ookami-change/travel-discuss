@@ -7,16 +7,72 @@ import { Button, Chip, ErrorText, Field, Input, Select, Textarea, useAsync } fro
 import { api, useApi } from "@/lib/client";
 import { SUGGESTION_TYPES, TRANSPORT_MODES, type TransportMode } from "@/lib/constants";
 import { TRANSPORT_LABEL, TYPE_LABEL } from "@/lib/labels";
-import type { Lodging, PlanDay, PlanItem, Suggestion } from "@/lib/types";
+import type { Lodging, PlanDay, PlanItem, SnapshotItem, Suggestion } from "@/lib/types";
 
 type Props = { days: PlanDay[]; dayId: string; item?: PlanItem; onDone: () => void };
+
+/** Everything about a plan item except where it sits. */
+export type ItemValues = Omit<SnapshotItem, "id">;
 
 export function ItemEditor({ days, dayId, item, onDone }: Props) {
   const { base } = useTrip();
   const { busy, error, run } = useAsync();
+
+  const save = (values: ItemValues, day: string) =>
+    run(async () => {
+      const payload = { ...values, dayId: day };
+      if (item) await api("PATCH", `${base}/plan/items/${item.id}`, payload);
+      else await api("POST", `${base}/plan/items`, payload);
+      onDone();
+    });
+
+  const remove = () =>
+    run(async () => {
+      if (!confirm(`从行程中移除「${item!.title}」？`)) return;
+      await api("DELETE", `${base}/plan/items/${item!.id}`);
+      onDone();
+    });
+
+  return (
+    <ItemForm
+      item={item}
+      days={days.map((d, i) => ({ value: d.id, label: `第 ${i + 1} 天${d.title ? ` · ${d.title}` : ""}` }))}
+      day={dayId}
+      busy={busy}
+      error={error}
+      submitLabel={item ? "保存" : "加入行程"}
+      onSubmit={save}
+      onRemove={item ? remove : undefined}
+    />
+  );
+}
+
+/** The item form itself; the caller decides what saving means (API call, or editing a draft). */
+export function ItemForm({
+  item,
+  days,
+  day,
+  busy,
+  error,
+  submitLabel,
+  onSubmit,
+  onRemove,
+  removeLabel = "移除",
+}: {
+  item?: ItemValues;
+  days: { value: string; label: string }[];
+  day: string;
+  busy?: boolean;
+  error?: unknown;
+  submitLabel: string;
+  onSubmit: (values: ItemValues, day: string) => void;
+  onRemove?: () => void;
+  removeLabel?: string;
+}) {
+  const { base } = useTrip();
   const { data: suggestions } = useApi<Suggestion[]>(item ? null : `${base}/suggestions`);
   const [f, setF] = useState({
-    dayId,
+    dayId: day,
     title: item?.title ?? "",
     type: item?.type ?? "sight",
     address: item?.address ?? null,
@@ -36,24 +92,18 @@ export function ItemEditor({ days, dayId, item, onDone }: Props) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    run(async () => {
-      const { mode, minutes, tnote, ...rest } = f;
-      const payload = {
+    const { mode, minutes, tnote, dayId, time, notes, ...rest } = f;
+    onSubmit(
+      {
         ...rest,
-        transport: mode ? { mode, minutes: minutes ? Number(minutes) : null, note: tnote || null } : null,
-      };
-      if (item) await api("PATCH", `${base}/plan/items/${item.id}`, payload);
-      else await api("POST", `${base}/plan/items`, payload);
-      onDone();
-    });
+        title: rest.title.trim(),
+        time: time || null,
+        notes: notes.trim() || null,
+        transport: mode ? { mode, minutes: minutes ? Number(minutes) : null, note: tnote.trim() || null } : null,
+      },
+      dayId,
+    );
   };
-
-  const remove = () =>
-    run(async () => {
-      if (!confirm(`从行程中移除「${item!.title}」？`)) return;
-      await api("DELETE", `${base}/plan/items/${item!.id}`);
-      onDone();
-    });
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -101,9 +151,9 @@ export function ItemEditor({ days, dayId, item, onDone }: Props) {
         </Field>
         <Field label="哪一天">
           <Select value={f.dayId} onChange={(e) => set("dayId", e.target.value)}>
-            {days.map((d, i) => (
-              <option key={d.id} value={d.id}>
-                第 {i + 1} 天{d.title ? ` · ${d.title}` : ""}
+            {days.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
               </option>
             ))}
           </Select>
@@ -133,13 +183,13 @@ export function ItemEditor({ days, dayId, item, onDone }: Props) {
       </fieldset>
       <ErrorText error={error} />
       <div className="flex gap-2">
-        {item && (
-          <Button type="button" variant="danger" onClick={remove} disabled={busy}>
-            移除
+        {onRemove && (
+          <Button type="button" variant="danger" onClick={onRemove} disabled={busy}>
+            {removeLabel}
           </Button>
         )}
         <Button className="flex-1" busy={busy}>
-          {item ? "保存" : "加入行程"}
+          {submitLabel}
         </Button>
       </div>
     </form>
@@ -149,13 +199,27 @@ export function ItemEditor({ days, dayId, item, onDone }: Props) {
 export function LodgingEditor({ day, onDone }: { day: PlanDay; onDone: () => void }) {
   const { base } = useTrip();
   const { busy, error, run } = useAsync();
-  const [f, setF] = useState<Lodging>(day.lodging ?? { name: "", address: null, lng: null, lat: null, poiId: null, note: null });
-
   const save = (lodging: Lodging | null) =>
     run(async () => {
       await api("PATCH", `${base}/plan/days/${day.id}`, { lodging });
       onDone();
     });
+  return <LodgingForm lodging={day.lodging} busy={busy} error={error} onSave={save} />;
+}
+
+export function LodgingForm({
+  lodging,
+  busy,
+  error,
+  onSave,
+}: {
+  lodging: Lodging | null;
+  busy?: boolean;
+  error?: unknown;
+  onSave: (lodging: Lodging | null) => void;
+}) {
+  const [f, setF] = useState<Lodging>(lodging ?? { name: "", address: null, lng: null, lat: null, poiId: null, note: null });
+  const save = onSave;
 
   return (
     <form
@@ -181,7 +245,7 @@ export function LodgingEditor({ day, onDone }: { day: PlanDay; onDone: () => voi
       </Field>
       <ErrorText error={error} />
       <div className="flex gap-2">
-        {day.lodging && (
+        {lodging && (
           <Button type="button" variant="danger" onClick={() => save(null)} disabled={busy}>
             清除
           </Button>

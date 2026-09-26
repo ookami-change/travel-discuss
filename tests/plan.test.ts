@@ -79,6 +79,7 @@ describe("draftToSnapshot", () => {
       memberCount: 2,
       suggestions: [{ id: "s1", title: "西湖", type: "sight", address: "杭州", lng: 120.1, lat: 30.2, reason: null, votes: 3, comments: [] }],
       plan,
+      mode: "fresh",
       instructions: null,
     };
     const raw = aiDraftSchema.parse({
@@ -101,5 +102,37 @@ describe("draftToSnapshot", () => {
     expect(lake.id).toBeUndefined();
     expect(lake).toMatchObject({ suggestionId: "s1", lng: 120.1, lat: 30.2, type: "other", time: null, transport: { mode: "other", minutes: 10 } });
     expect(snap.days[0].lodging).toEqual({ name: "酒店", address: null });
+  });
+});
+
+describe("draftToSnapshot (adjust)", () => {
+  it("keeps omitted fields, day lodging and checked-off items the model forgot", async () => {
+    const { trip } = await makeTrip([["A", "B", "Done"], ["C"]]);
+    const [a0, , done] = (await loadPlan(trip.id))[0].items;
+    await db.update(planItems).set({ time: "09:00", notes: "早点去", lng: 1, lat: 2 }).where(eq(planItems.id, a0.id));
+    await db.update(planItems).set({ completedAt: new Date() }).where(eq(planItems.id, done.id));
+    const plan = await loadPlan(trip.id);
+    const [a, b] = plan[0].items;
+    const input: DraftInput = {
+      trip: { name: "t", destination: null, startDate: null, endDate: null },
+      dayTotal: null,
+      memberCount: 2,
+      suggestions: [],
+      plan,
+      mode: "adjust",
+      instructions: "B 改到下午",
+    };
+    const raw = aiDraftSchema.parse({
+      days: [
+        { id: plan[0].id, items: [{ id: a.id }, { id: b.id, time: "15:00" }, { id: null, title: "咖啡", type: "food" }] },
+        { id: plan[1].id, items: [{ id: plan[1].items[0].id }] },
+      ],
+    });
+    const snap = draftToSnapshot(raw, input);
+    expect(snap.days[0].title).toBe("D1");
+    expect(snap.days[0].items.map((i) => i.title)).toEqual(["A", "B", "咖啡", "Done"]);
+    expect(snap.days[0].items[0]).toMatchObject({ id: a.id, time: "09:00", notes: "早点去", lng: 1, lat: 2 });
+    expect(snap.days[0].items[1]).toMatchObject({ id: b.id, time: "15:00" });
+    expect(snap.days[0].items[3].id).toBe(done.id);
   });
 });
