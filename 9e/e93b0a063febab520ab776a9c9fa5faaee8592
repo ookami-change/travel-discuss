@@ -1,0 +1,19 @@
+src/app/explore/page.tsx
+  s_a8c6149f7ac932::t_7965645cb86ff0 5,9-10,26-27,72,87,138-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "9ee93b0a063febab520ab776a9c9fa5faaee8592",
+  "prompts": {},
+  "sessions": {
+    "s_a8c6149f7ac932": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b1b7947f-3f4b-46df-905a-1e299b1f6b8a",
+        "model": "unknown"
+      },
+      "human_author": "hanchenggang.4869 <hanchenggang.4869@jd.com>"
+    }
+  }
+}
