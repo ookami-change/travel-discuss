@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Spot } from "../lib/explore";
+import type { Spot, Stay } from "../lib/explore";
 import { SUGGESTION_TYPES, TRANSPORT_MODES, type SuggestionType, type TransportMode } from "../lib/constants";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -253,6 +253,15 @@ export const spotScans = pgTable("spot_scans", {
   adcode: text("adcode").primaryKey(),
   spots: jsonb("spots").$type<Spot[]>().notNull(),
   /** SCAN_VERSION the scan was made with. */
+  version: integer("version").notNull().default(1),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Cached 休闲好去处 scan for one city (see lib/explore). */
+export const stayScans = pgTable("stay_scans", {
+  adcode: text("adcode").primaryKey(),
+  stays: jsonb("stays").$type<Stay[]>().notNull(),
+  /** STAY_VERSION the scan was made with. */
   version: integer("version").notNull().default(1),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
 });

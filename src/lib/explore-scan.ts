@@ -1,5 +1,5 @@
-import { amenityCount, searchPois, type ScenicPoi } from "./amap";
-import { AMENITY_RADIUS, CITY_NAMES, quietScore, type Spot } from "./explore";
+import { amenityCount, foodAround, searchPois, type ScenicPoi } from "./amap";
+import { AMENITY_RADIUS, CITY_NAMES, distanceKm, FOOD_RADIUS, GOOD_FOOD, quietScore, type Spot, type Stay } from "./explore";
 
 /** Where spots come from, each capped separately so city parks can't crowd out 风景名胜. */
 const SOURCES: { query: { types?: string; keywords?: string }; max: number }[] = [
@@ -46,5 +46,38 @@ export async function scanCity(adcode: string): Promise<Spot[]> {
   return mapLimit(unique, 3, async (p) => {
     const amenities = await amenityCount(p.lng, p.lat, AMENITY_RADIUS);
     return { ...p, city, amenities, quiet: quietScore(amenities, p.typecode) };
+  });
+}
+
+const HOTEL_MIN_RATING = 4.5;
+const MAX_STAYS = 80;
+/** Hotels this close together are one 去处; keep the best rated. */
+const SAME_PLACE_KM = 0.3;
+
+/** Well-rated hotels in the city, then one nearby-food lookup each (~90 高德 calls). */
+export async function scanStays(adcode: string): Promise<Stay[]> {
+  const city = CITY_NAMES.get(adcode);
+  if (!city) throw new Error(`unknown adcode ${adcode}`);
+  const hotels = (await searchPois(adcode, { types: "100000" }, 200))
+    .filter((p) => p.typecode.split("|")[0].startsWith("100") && (p.rating ?? 0) >= HOTEL_MIN_RATING)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  const picked: ScenicPoi[] = [];
+  for (const h of hotels) {
+    if (picked.length >= MAX_STAYS) break;
+    if (!picked.some((p) => p.poiId === h.poiId || distanceKm(p, h) < SAME_PLACE_KM)) picked.push(h);
+  }
+  return mapLimit(picked, 3, async (h) => {
+    const { count, ratings } = await foodAround(h.lng, h.lat, FOOD_RADIUS);
+    const rated = ratings.filter((r) => r > 0);
+    return {
+      ...h,
+      city,
+      rating: h.rating ?? 0,
+      food: {
+        count,
+        avg: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 100) / 100 : null,
+        good: rated.filter((r) => r >= GOOD_FOOD).length,
+      },
+    };
   });
 }

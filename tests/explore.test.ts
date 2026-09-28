@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isHiddenGem, quietScore } from "@/lib/explore";
+import { isHiddenGem, nearestWithin, quietScore, stayScore } from "@/lib/explore";
 
 describe("quietScore", () => {
   it("is 100 with no amenities and falls on a log scale", () => {
@@ -22,4 +22,30 @@ it("hidden gem needs both quiet and a good rating", () => {
   expect(isHiddenGem({ quiet: 70, rating: 4.6 })).toBe(true);
   expect(isHiddenGem({ quiet: 70, rating: null })).toBe(false);
   expect(isHiddenGem({ quiet: 50, rating: 4.9 })).toBe(false);
+});
+
+describe("stayScore", () => {
+  const food = (avg: number | null, good: number) => ({ count: 100, avg, good });
+
+  it("weights hotel 30, food 35, distance 35", () => {
+    expect(stayScore({ rating: 5, food: food(4.2, 5) }, 8)).toBe(100);
+    expect(stayScore({ rating: 4, food: food(3, 0) }, 0)).toBe(0);
+    expect(stayScore({ rating: 4.5, food: food(3.6, 2) }, 4)).toBe(48); // 15 + 35 × (0.5 × 0.5 + 0.5 × 0.4) + 35 × 0.5 = 48.25
+  });
+
+  it("scores unrated food as zero and unknown distance as half", () => {
+    expect(stayScore({ rating: 5, food: food(null, 0) }, null)).toBe(30 + 18);
+  });
+});
+
+it("nearestWithin finds the closest target inside maxKm only", () => {
+  const targets = [
+    { name: "A", lng: 108.0, lat: 24.0 },
+    { name: "B", lng: 108.05, lat: 24.0 },
+    { name: "C", lng: 110.0, lat: 26.0 },
+  ];
+  const [near, none] = nearestWithin([{ lng: 108.04, lat: 24.0 }, { lng: 112, lat: 20 }], targets);
+  expect(near?.target.name).toBe("B");
+  expect(near?.km).toBeCloseTo(1.02, 1);
+  expect(none).toBeNull();
 });
