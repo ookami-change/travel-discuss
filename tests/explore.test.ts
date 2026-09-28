@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isHiddenGem, nearestWithin, quietScore, stayScore } from "@/lib/explore";
+import { isAttraction, isHiddenGem, nearestWithin, quietScore, stayScore } from "@/lib/explore";
 
 describe("quietScore", () => {
   it("is 100 with no amenities and falls on a log scale", () => {
@@ -48,4 +48,16 @@ it("nearestWithin finds the closest target inside maxKm only", () => {
   expect(near?.target.name).toBe("B");
   expect(near?.km).toBeCloseTo(1.02, 1);
   expect(none).toBeNull();
+});
+
+it("isAttraction skips parks, shop branches, low-rated spots and village temples", () => {
+  const a = (typecode: string, rating: number | null, name = "某景区") => isAttraction({ typecode, rating, name });
+  expect(a("110200", 4.2)).toBe(true);
+  expect(a("110210|110202", 4.0)).toBe(true);
+  expect(a("110200", 3.8)).toBe(false);
+  expect(a("110200", null)).toBe(false);
+  expect(a("110101", 4.8)).toBe(false);
+  expect(a("110205", 4.2, "北帝庙")).toBe(false);
+  expect(a("110205", 4.6, "南华寺")).toBe(true);
+  expect(a("110200", 4.3, "茶瀑布(糖厂街店)")).toBe(false);
 });

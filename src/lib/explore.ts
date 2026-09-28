@@ -97,8 +97,18 @@ export function distanceKm(a: { lng: number; lat: number }, b: { lng: number; la
   return 12742 * Math.asin(Math.sqrt(h));
 }
 
-/** 风景名胜 (1102xx) only — city parks are everywhere and don't draw tourists. */
-export const isScenic = (s: Pick<Spot, "typecode">) => s.typecode.split("|")[0].startsWith("1102");
+/** "茶瀑布(糖厂街店)": a shop chain branch that 高德 files under 风景名胜. */
+export const isShopBranch = (name: string) => /店[)）]$/.test(name);
+
+/**
+ * Sights that actually draw visitors, for 休闲好去处's distance: 风景名胜 (1102xx; city parks are everywhere) rated 4.0+.
+ * Half of 1102xx is 寺庙道观, mostly village shrines, so temples count only from 4.5.
+ */
+export function isAttraction(s: Pick<Spot, "typecode" | "rating" | "name">) {
+  const main = s.typecode.split("|")[0];
+  if (!main.startsWith("1102") || isShopBranch(s.name)) return false;
+  return (s.rating ?? 0) >= (main === "110205" ? 4.5 : 4);
+}
 
 /** Nearest of `targets` to each point, searching only a latitude band (targets sorted by lat) since results are ≤ maxKm. */
 export function nearestWithin<T extends { lng: number; lat: number }>(points: { lng: number; lat: number }[], targets: T[], maxKm = 50) {
