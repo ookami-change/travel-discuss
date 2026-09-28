@@ -35,8 +35,8 @@ export type Spot = ScenicPoi & {
   quiet: number;
 };
 
-/** 高德 subtype codes for famous sights, which draw crowds beyond what nearby amenities suggest. */
-const FAME_PENALTY: Record<string, number> = { "110201": 25, "110202": 15, "110203": 5 };
+/** 高德 subtype codes for rated sights (世界遗产 / 国家级 / 省级), which draw crowds beyond what nearby amenities suggest. */
+const FAME_PENALTY: Record<string, number> = { "110201": 25, "110202": 10, "110203": 5 };
 
 /**
  * 冷门度. Nearby 餐饮/住宿 count is the main signal (more amenities ⇒ more visitors), on a log scale so
@@ -44,7 +44,9 @@ const FAME_PENALTY: Record<string, number> = { "110201": 25, "110202": 15, "1102
  */
 export function quietScore(amenities: number, typecode: string): number {
   const base = 100 - 20 * Math.log2(1 + Math.max(0, amenities) / 5);
-  return Math.round(Math.min(100, Math.max(0, base - (FAME_PENALTY[typecode] ?? 0))));
+  // Typecodes can be compound ("110210|110202"); take the biggest penalty.
+  const penalty = Math.max(0, ...typecode.split("|").map((c) => FAME_PENALTY[c] ?? 0));
+  return Math.round(Math.min(100, Math.max(0, base - penalty)));
 }
 
 /** 冷门 and well rated — worth the detour. */
