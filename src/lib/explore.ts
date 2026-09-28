@@ -73,6 +73,11 @@ export type Stay = Omit<ScenicPoi, "rating"> & {
   };
 };
 
+/** Places to unwind rather than business/budget stays; matched on the name, so no rescan needed. */
+const LEISURE = /民宿|度假|温泉|山庄|客栈|庄园|农庄|农家|山居|别墅|营地|露营|院子|小院|禅居|书院/;
+export const LEISURE_BONUS = 15;
+export const isLeisureStay = (s: Pick<Stay, "name">) => LEISURE.test(s.name);
+
 /** Nearest scenic spot, filled in on read from whatever spot scans exist. */
 export type StayView = Stay & { nearest: { name: string; km: number } | null; score: number };
 
@@ -80,13 +85,15 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
 /**
  * 休闲指数 0–100: 酒店评分 30% (4.0 → 0, 5.0 → full), 周边美食 35% (half mean rating 3.0 → 4.2,
- * half count of ≥4.0 places up to 5), 离景点 35% (0 km → 0, 8 km+ → full; unknown counts as half).
+ * half count of ≥4.0 places up to 5), 离景点 35% (0 km → 0, 8 km+ → full; unknown counts as half),
+ * plus LEISURE_BONUS for 民宿/度假/温泉… stays, capped at 100.
  */
-export function stayScore(s: Pick<Stay, "rating" | "food">, nearestKm: number | null): number {
+export function stayScore(s: Pick<Stay, "rating" | "food" | "name">, nearestKm: number | null): number {
   const hotel = clamp01(s.rating - 4);
   const food = s.food.avg === null ? 0 : 0.5 * clamp01((s.food.avg - 3) / 1.2) + 0.5 * Math.min(s.food.good / 5, 1);
   const far = nearestKm === null ? 0.5 : clamp01(nearestKm / 8);
-  return Math.round(100 * (0.3 * hotel + 0.35 * food + 0.35 * far));
+  const bonus = isLeisureStay(s) ? LEISURE_BONUS : 0;
+  return Math.min(100, Math.round(100 * (0.3 * hotel + 0.35 * food + 0.35 * far)) + bonus);
 }
 
 export function distanceKm(a: { lng: number; lat: number }, b: { lng: number; lat: number }) {
