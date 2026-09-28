@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { Spot } from "../lib/explore";
 import { SUGGESTION_TYPES, TRANSPORT_MODES, type SuggestionType, type TransportMode } from "../lib/constants";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -246,3 +247,10 @@ export const expenses = pgTable(
   },
   (t) => [index("expenses_trip").on(t.tripId)],
 );
+
+/** Cached 冷门景点 scan for one city (see lib/explore). Refreshed at most every SCAN_TTL. */
+export const spotScans = pgTable("spot_scans", {
+  adcode: text("adcode").primaryKey(),
+  spots: jsonb("spots").$type<Spot[]>().notNull(),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+});

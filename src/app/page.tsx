@@ -40,6 +40,15 @@ export default function Home() {
           </Button>
         )}
       </section>
+      <Link href="/explore" className="mt-4 block">
+        <Card className="flex items-center justify-between p-4 hover:border-accent">
+          <span>
+            <span className="font-medium">🗺️ 找人少的景点</span>
+            <span className="block text-xs text-muted">两广冷门景点地图</span>
+          </span>
+          <span className="text-muted">›</span>
+        </Card>
+      </Link>
       <p className="mt-6 text-center text-xs text-muted">想加入朋友的旅行？请打开对方发给你的邀请链接。</p>
     </main>
   );
