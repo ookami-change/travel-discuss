@@ -252,5 +252,7 @@ export const expenses = pgTable(
 export const spotScans = pgTable("spot_scans", {
   adcode: text("adcode").primaryKey(),
   spots: jsonb("spots").$type<Spot[]>().notNull(),
+  /** SCAN_VERSION the scan was made with. */
+  version: integer("version").notNull().default(1),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
 });

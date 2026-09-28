@@ -7,7 +7,7 @@ import { api, useApi } from "@/lib/client";
 import { AMENITY_RADIUS, isHiddenGem, type Spot } from "@/lib/explore";
 
 type ExploreData = {
-  regions: { province: string; cities: { adcode: string; name: string; fetchedAt: string | null }[] }[];
+  regions: { province: string; cities: { adcode: string; name: string; fetchedAt: string | null; stale: boolean }[] }[];
   spots: Spot[];
 };
 
@@ -31,11 +31,12 @@ export default function Explore() {
     [data, city, minQuiet, gemsOnly],
   );
 
-  const runScan = (adcode: string, name: string) =>
+  const current = scanned.find((c) => c.name === city);
+  const runScan = (adcode: string, name: string, force = false) =>
     scan.run(async () => {
       setScanning(name);
       try {
-        await api("POST", "/api/explore/scan", { adcode });
+        await api("POST", "/api/explore/scan", { adcode, force });
         await mutate();
         setCity(name);
       } finally {
@@ -54,7 +55,7 @@ export default function Explore() {
 
       <Card className="space-y-3 p-4">
         <p className="text-sm text-muted">
-          点城市扫描它的风景名胜（每城约 30 秒，结果缓存 30 天）。冷门度看的是景点周边 {AMENITY_RADIUS / 1000}km 内餐馆和酒店有多少：配套越少，游客通常越少；世界遗产、国家级景点再额外扣分。
+          点城市扫描它的风景名胜、公园和自然保护区（每城约 1 分钟）。冷门度看的是景点周边 {AMENITY_RADIUS / 1000}km 内餐馆和酒店有多少：配套越少，游客通常越少；世界遗产、国家级景点再额外扣分。标「旧」的城市是按旧规则扫的（不含公园和保护区），选中后可以重新扫描。
         </p>
         {data?.regions.map((r) => (
           <div key={r.province}>
@@ -68,16 +69,23 @@ export default function Explore() {
                   className={`h-8 rounded-full border px-3 text-sm transition disabled:opacity-50 ${
                     city === c.name ? "border-accent bg-accent text-accent-fg" : c.fetchedAt ? "border-accent/40 bg-accent-soft" : "border-line bg-card text-muted"
                   }`}
-                  title={c.fetchedAt ? `已扫描 ${new Date(c.fetchedAt).toLocaleDateString()}` : "点击扫描"}
+                  title={c.fetchedAt ? `${c.stale ? "旧规则" : "已"}扫描 ${new Date(c.fetchedAt).toLocaleDateString()}` : "点击扫描"}
                 >
                   {c.name}
                   {!c.fetchedAt && " ＋"}
+                  {c.stale && <span className="ml-0.5 text-xs opacity-70">·旧</span>}
                 </button>
               ))}
             </div>
           </div>
         ))}
-        {scanning && <p className="text-sm text-accent">正在扫描{scanning}，大约 30 秒…</p>}
+        {current && !scanning && (
+          <button disabled={scan.busy} onClick={() => runScan(current.adcode, current.name, true)} className="text-sm text-accent hover:underline disabled:opacity-50">
+            ↻ 重新扫描{current.name}
+            {current.fetchedAt && <span className="text-muted">（上次 {new Date(current.fetchedAt).toLocaleDateString()}）</span>}
+          </button>
+        )}
+        {scanning && <p className="text-sm text-accent">正在扫描{scanning}，大约 1 分钟…</p>}
         <ErrorText error={scan.error ?? error} />
       </Card>
 

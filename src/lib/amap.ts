@@ -85,12 +85,13 @@ export type ScenicPoi = {
   rating: number | null;
 };
 
-/** 纪念馆 / 教堂 / 回教寺 — 高德 files them under 风景名胜 but they are rarely a trip destination. */
-const NOT_DESTINATION = new Set(["110204", "110206", "110207"]);
 const MAX_PAGES = 8;
 
-/** 风景名胜 (typecode 1102xx) POIs in a city, via 高德「搜索 POI 2.0」, ranked the way 高德 ranks them. */
-export async function scenicPois(adcode: string, max: number): Promise<ScenicPoi[]> {
+/**
+ * POIs in a region via 高德「搜索 POI 2.0」, in 高德's ranking. `region` is any adcode (city or county);
+ * the query is a typecode list ("110101|110103") and/or keywords.
+ */
+export async function searchPois(region: string, query: { types?: string; keywords?: string }, max: number): Promise<ScenicPoi[]> {
   const out: ScenicPoi[] = [];
   for (let page = 1; out.length < max && page <= MAX_PAGES; page++) {
     const data = await amapGet<{
@@ -98,8 +99,9 @@ export async function scenicPois(adcode: string, max: number): Promise<ScenicPoi
       info: string;
       pois?: { id: string; name: string; type: unknown; typecode: unknown; adname: unknown; address: unknown; location: unknown; business?: { rating?: unknown } }[];
     }>("/v5/place/text", {
-      types: "110200",
-      region: adcode,
+      ...(query.types && { types: query.types }),
+      ...(query.keywords && { keywords: query.keywords }),
+      region,
       city_limit: "true",
       page_size: "25",
       page_num: String(page),
@@ -109,15 +111,11 @@ export async function scenicPois(adcode: string, max: number): Promise<ScenicPoi
     for (const p of pois) {
       const loc = str(p.location)?.split(",").map(Number);
       if (!loc || !Number.isFinite(loc[0]) || !Number.isFinite(loc[1])) continue;
-      const typecode = str(p.typecode) ?? "";
-      if (NOT_DESTINATION.has(typecode.split("|")[0])) continue;
-      // "古龙山大峡谷-漂流" style entries are parts of a scenic area that is listed on its own.
-      if (p.name.includes("-")) continue;
       const rating = Number(str(p.business?.rating));
       out.push({
         poiId: p.id,
         name: p.name,
-        typecode,
+        typecode: str(p.typecode) ?? "",
         type: str(p.type) ?? "",
         district: str(p.adname),
         address: str(p.address),
