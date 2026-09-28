@@ -1,0 +1,1 @@
+ALTER TABLE "spot_scans" ADD COLUMN "version" integer DEFAULT 1 NOT NULL;

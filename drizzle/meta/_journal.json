@@ -22,6 +22,13 @@
       "when": 1790560565446,
       "tag": "0002_spot_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790569190133,
+      "tag": "0003_spot_scan_version",
+      "breakpoints": true
     }
   ]
 }

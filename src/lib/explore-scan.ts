@@ -1,5 +1,26 @@
-import { amenityCount, scenicPois } from "./amap";
-import { AMENITY_RADIUS, CITY_NAMES, SPOTS_PER_CITY, quietScore, type Spot } from "./explore";
+import { amenityCount, searchPois, type ScenicPoi } from "./amap";
+import { AMENITY_RADIUS, CITY_NAMES, quietScore, type Spot } from "./explore";
+
+/** Where spots come from, each capped separately so city parks can't crowd out 风景名胜. */
+const SOURCES: { query: { types?: string; keywords?: string }; max: number }[] = [
+  { query: { types: "110200" }, max: 100 }, // 风景名胜 and its subtypes
+  { query: { types: "110101|110103" }, max: 50 }, // 公园, 植物园
+  // 自然保护区 etc. have no typecode of their own in 高德 — they sit under 风景名胜 / 公园.
+  { query: { keywords: "自然保护区" }, max: 25 },
+  { query: { keywords: "森林公园" }, max: 25 },
+  { query: { keywords: "湿地公园" }, max: 25 },
+];
+
+/** 纪念馆 / 教堂 / 回教寺 / 动物园 / 水族馆 / 城市广场 — filed under 风景名胜 or 公园 but rarely a trip destination. */
+const NOT_DESTINATION = new Set(["110204", "110206", "110207", "110102", "110104", "110105"]);
+
+function isDestination(p: ScenicPoi) {
+  const main = p.typecode.split("|")[0];
+  // Keyword hits can be anything (a hotel named after the park); keep 风景名胜 (11xxxx) only.
+  if (!main.startsWith("11") || NOT_DESTINATION.has(main)) return false;
+  // "古龙山大峡谷-漂流" style entries are parts of a scenic area that is listed on its own.
+  return !p.name.includes("-");
+}
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
@@ -14,12 +35,13 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
-/** Hits 高德 ~SPOTS_PER_CITY × 1.04 times. */
+/** Up to ~10 search pages plus one 周边 lookup per spot (~200 高德 calls, about a minute). */
 export async function scanCity(adcode: string): Promise<Spot[]> {
   const city = CITY_NAMES.get(adcode);
   if (!city) throw new Error(`unknown adcode ${adcode}`);
-  const pois = await scenicPois(adcode, SPOTS_PER_CITY);
-  // Same POI can come back twice across pages when 高德 re-ranks mid-scan.
+  const pois: ScenicPoi[] = [];
+  for (const src of SOURCES) pois.push(...(await searchPois(adcode, src.query, src.max)).filter(isDestination));
+  // Sources overlap, and 高德 can repeat a POI across pages when it re-ranks mid-scan.
   const unique = [...new Map(pois.map((p) => [p.poiId, p])).values()];
   return mapLimit(unique, 3, async (p) => {
     const amenities = await amenityCount(p.lng, p.lat, AMENITY_RADIUS);

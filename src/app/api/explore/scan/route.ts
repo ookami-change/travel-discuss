@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { spotScans } from "@/db/schema";
-import { CITY_NAMES, SCAN_TTL_MS, type Spot } from "@/lib/explore";
+import { CITY_NAMES, SCAN_TTL_MS, SCAN_VERSION, type Spot } from "@/lib/explore";
 import { scanCity } from "@/lib/explore-scan";
 import { sha256 } from "@/lib/crypto";
 import { badRequest, body, ok, route } from "@/lib/http";
@@ -17,13 +17,15 @@ function isAdmin(req: Request) {
   return !!want && !!got && sha256(got) === sha256(want);
 }
 
-/** Scans a city unless a fresh cached scan exists. Each scan costs ~100 高德 calls, hence the tight limits. */
+/** Scans a city unless a fresh, current-version scan exists (or `force`). Each scan costs ~200 高德 calls, hence the tight limits. */
 export const POST = route(async (req) => {
-  const { adcode } = await body(req, z.object({ adcode: z.string() }));
+  const { adcode, force } = await body(req, z.object({ adcode: z.string(), force: z.boolean().optional() }));
   if (!CITY_NAMES.has(adcode)) throw badRequest("不支持的城市");
 
   const [cached] = await db.select().from(spotScans).where(eq(spotScans.adcode, adcode));
-  if (cached && Date.now() - cached.fetchedAt.getTime() < SCAN_TTL_MS) return ok({ spots: cached.spots, cached: true });
+  if (!force && cached && cached.version === SCAN_VERSION && Date.now() - cached.fetchedAt.getTime() < SCAN_TTL_MS) {
+    return ok({ spots: cached.spots, cached: true });
+  }
 
   let scan = inflight.get(adcode);
   if (!scan) {
@@ -37,7 +39,7 @@ export const POST = route(async (req) => {
   const spots = await scan;
   await db
     .insert(spotScans)
-    .values({ adcode, spots })
-    .onConflictDoUpdate({ target: spotScans.adcode, set: { spots, fetchedAt: new Date() } });
+    .values({ adcode, spots, version: SCAN_VERSION })
+    .onConflictDoUpdate({ target: spotScans.adcode, set: { spots, version: SCAN_VERSION, fetchedAt: new Date() } });
   return ok({ spots, cached: false });
 });

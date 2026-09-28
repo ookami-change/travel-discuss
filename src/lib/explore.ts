@@ -14,7 +14,7 @@ export const REGIONS = [
     province: "广西",
     cities: [
       ["450100", "南宁"], ["450200", "柳州"], ["450300", "桂林"], ["450400", "梧州"], ["450500", "北海"], ["450600", "防城港"],
-      ["450700", "钦州"], ["450800", "贵港"], ["450900", "玉林"], ["451000", "百色"], ["451100", "贺州"], ["451200", "河池"],
+      ["450700", "钦州"], ["450800", "贵港"], ["450900", "玉林"], ["451000", "百色"], ["451081", "靖西"], ["451100", "贺州"], ["451200", "河池"],
       ["451300", "来宾"], ["451400", "崇左"],
     ],
   },
@@ -22,8 +22,8 @@ export const REGIONS = [
 
 export const CITY_NAMES: ReadonlyMap<string, string> = new Map(REGIONS.flatMap((r) => r.cities.map(([code, name]) => [code, name] as const)));
 
-/** Spots fetched per city: one POI page per 25, plus one 周边 lookup each. */
-export const SPOTS_PER_CITY = 100;
+/** Bump when scanCity starts collecting different spots, so older scans show as 旧. */
+export const SCAN_VERSION = 2;
 export const AMENITY_RADIUS = 1500;
 export const SCAN_TTL_MS = 30 * 24 * 3600 * 1000;
 
