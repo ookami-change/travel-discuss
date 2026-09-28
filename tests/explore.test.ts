@@ -10,9 +10,10 @@ describe("quietScore", () => {
   });
 
   it("docks famous sights", () => {
-    expect(quietScore(0, "110201")).toBe(75);
-    expect(quietScore(0, "110202")).toBe(90);
-    expect(quietScore(0, "110210|110201")).toBe(75);
+    expect(quietScore(0, "110201")).toBe(25);
+    expect(quietScore(0, "110202")).toBe(70);
+    expect(quietScore(0, "110203")).toBe(85);
+    expect(quietScore(0, "110210|110201")).toBe(25);
     expect(quietScore(200, "110201")).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { spotScans } from "@/db/schema";
-import { REGIONS } from "@/lib/explore";
+import { quietScore, REGIONS } from "@/lib/explore";
 import { ok, route } from "@/lib/http";
 
 /** Every cached city scan, for the 冷门景点 map. */
@@ -12,6 +12,7 @@ export const GET = route(async () => {
       province: r.province,
       cities: r.cities.map(([adcode, name]) => ({ adcode, name, fetchedAt: fetched.get(adcode) ?? null })),
     })),
-    spots: rows.flatMap((r) => r.spots),
+    // Re-score on read so tuning quietScore doesn't need a rescan.
+    spots: rows.flatMap((r) => r.spots.map((s) => ({ ...s, quiet: quietScore(s.amenities, s.typecode) }))),
   });
 });
