@@ -4,10 +4,18 @@ import { db } from "@/db";
 import { spotScans } from "@/db/schema";
 import { CITY_NAMES, SCAN_TTL_MS, type Spot } from "@/lib/explore";
 import { scanCity } from "@/lib/explore-scan";
+import { sha256 } from "@/lib/crypto";
 import { badRequest, body, ok, route } from "@/lib/http";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 const inflight = new Map<string, Promise<Spot[]>>();
+
+/** Bulk pre-scans on the server send EXPLORE_ADMIN_TOKEN and skip the rate limits. */
+function isAdmin(req: Request) {
+  const want = process.env.EXPLORE_ADMIN_TOKEN;
+  const got = req.headers.get("x-admin-token");
+  return !!want && !!got && sha256(got) === sha256(want);
+}
 
 /** Scans a city unless a fresh cached scan exists. Each scan costs ~100 高德 calls, hence the tight limits. */
 export const POST = route(async (req) => {
@@ -19,8 +27,10 @@ export const POST = route(async (req) => {
 
   let scan = inflight.get(adcode);
   if (!scan) {
-    rateLimit(`explore-scan:${clientIp(req)}`, 6, 3600 * 1000);
-    rateLimit("explore-scan:all", 20, 24 * 3600 * 1000);
+    if (!isAdmin(req)) {
+      rateLimit(`explore-scan:${clientIp(req)}`, 6, 3600 * 1000);
+      rateLimit("explore-scan:all", 20, 24 * 3600 * 1000);
+    }
     scan = scanCity(adcode).finally(() => inflight.delete(adcode));
     inflight.set(adcode, scan);
   }
