@@ -36,7 +36,7 @@ export type Spot = ScenicPoi & {
 };
 
 /** 高德 subtype codes for rated sights (世界遗产 / 国家级 / 省级), which draw crowds beyond what nearby amenities suggest. */
-const FAME_PENALTY: Record<string, number> = { "110201": 25, "110202": 10, "110203": 5 };
+const FAME_PENALTY: Record<string, number> = { "110201": 75, "110202": 30, "110203": 15 };
 
 /**
  * 冷门度. Nearby 餐饮/住宿 count is the main signal (more amenities ⇒ more visitors), on a log scale so
