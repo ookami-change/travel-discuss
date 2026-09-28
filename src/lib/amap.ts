@@ -141,3 +141,20 @@ export async function amenityCount(lng: number, lat: number, radius: number): Pr
   const n = Number(data.count);
   return Number.isFinite(n) ? n : 0;
 }
+
+/** Ratings (0 = unrated) of the ~25 nearest 餐饮 POIs within `radius` metres, plus the total count there. */
+export async function foodAround(lng: number, lat: number, radius: number): Promise<{ count: number; ratings: number[] }> {
+  const data = await amapGet<{ status: string; info: string; count?: unknown; pois?: { biz_ext?: { rating?: unknown } }[] }>("/v3/place/around", {
+    location: `${lng.toFixed(6)},${lat.toFixed(6)}`,
+    radius: String(radius),
+    types: "050000",
+    offset: "25",
+    page: "1",
+    extensions: "all",
+  });
+  const count = Number(data.count);
+  return {
+    count: Number.isFinite(count) ? count : 0,
+    ratings: (data.pois ?? []).map((p) => Number(str(p.biz_ext?.rating)) || 0),
+  };
+}

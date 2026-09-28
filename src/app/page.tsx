@@ -43,8 +43,8 @@ export default function Home() {
       <Link href="/explore" className="mt-4 block">
         <Card className="flex items-center justify-between p-4 hover:border-accent">
           <span>
-            <span className="font-medium">🗺️ 找人少的景点</span>
-            <span className="block text-xs text-muted">两广冷门景点地图</span>
+            <span className="font-medium">🗺️ 找人少的地方</span>
+            <span className="block text-xs text-muted">两广冷门景点 · 休闲好去处</span>
           </span>
           <span className="text-muted">›</span>
         </Card>

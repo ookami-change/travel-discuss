@@ -51,3 +51,72 @@ export function quietScore(amenities: number, typecode: string): number {
 
 /** 冷门 and well rated — worth the detour. */
 export const isHiddenGem = (s: Pick<Spot, "quiet" | "rating">) => s.quiet >= 60 && (s.rating ?? 0) >= 4.5;
+
+// ---- 休闲好去处: well-rated hotels with good food nearby, away from scenic spots ----
+
+/** Bump when scanStays starts collecting different data. */
+export const STAY_VERSION = 1;
+export const FOOD_RADIUS = 1000;
+/** 高德 rates restaurants low (3–4 is typical), so 4.0 already means good. */
+export const GOOD_FOOD = 4;
+
+export type Stay = Omit<ScenicPoi, "rating"> & {
+  city: string;
+  rating: number;
+  food: {
+    /** All 餐饮 POIs within FOOD_RADIUS. */
+    count: number;
+    /** Mean rating of the rated ones among the ~25 nearest; null when none are rated. */
+    avg: number | null;
+    /** How many of the ~25 nearest rate ≥ GOOD_FOOD. */
+    good: number;
+  };
+};
+
+/** Nearest scenic spot, filled in on read from whatever spot scans exist. */
+export type StayView = Stay & { nearest: { name: string; km: number } | null; score: number };
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/**
+ * 休闲指数 0–100: 酒店评分 30% (4.0 → 0, 5.0 → full), 周边美食 35% (half mean rating 3.0 → 4.2,
+ * half count of ≥4.0 places up to 5), 离景点 35% (0 km → 0, 8 km+ → full; unknown counts as half).
+ */
+export function stayScore(s: Pick<Stay, "rating" | "food">, nearestKm: number | null): number {
+  const hotel = clamp01(s.rating - 4);
+  const food = s.food.avg === null ? 0 : 0.5 * clamp01((s.food.avg - 3) / 1.2) + 0.5 * Math.min(s.food.good / 5, 1);
+  const far = nearestKm === null ? 0.5 : clamp01(nearestKm / 8);
+  return Math.round(100 * (0.3 * hotel + 0.35 * food + 0.35 * far));
+}
+
+export function distanceKm(a: { lng: number; lat: number }, b: { lng: number; lat: number }) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+/** 风景名胜 (1102xx) only — city parks are everywhere and don't draw tourists. */
+export const isScenic = (s: Pick<Spot, "typecode">) => s.typecode.split("|")[0].startsWith("1102");
+
+/** Nearest of `targets` to each point, searching only a latitude band (targets sorted by lat) since results are ≤ maxKm. */
+export function nearestWithin<T extends { lng: number; lat: number }>(points: { lng: number; lat: number }[], targets: T[], maxKm = 50) {
+  const sorted = [...targets].sort((a, b) => a.lat - b.lat);
+  const band = maxKm / 111;
+  return points.map((p) => {
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid].lat < p.lat - band) lo = mid + 1;
+      else hi = mid;
+    }
+    let best: { target: T; km: number } | null = null;
+    for (let i = lo; i < sorted.length && sorted[i].lat <= p.lat + band; i++) {
+      const km = distanceKm(p, sorted[i]);
+      if (km <= maxKm && (!best || km < best.km)) best = { target: sorted[i], km };
+    }
+    return best;
+  });
+}

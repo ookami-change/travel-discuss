@@ -3,15 +3,16 @@
 import "leaflet/dist/leaflet.css";
 import type { Map as LMap, LayerGroup } from "leaflet";
 import { useEffect, useRef, useState } from "react";
-import type { Spot } from "@/lib/explore";
+export type MapPoint = { id: string; lat: number; lng: number; score: number; label: string };
 
-export const quietColor = (q: number) => (q >= 70 ? "#16a34a" : q >= 40 ? "#d97706" : "#dc2626");
+/** 0–100 score, higher is better (冷门 / 休闲). */
+export const scoreColor = (q: number) => (q >= 70 ? "#16a34a" : q >= 40 ? "#d97706" : "#dc2626");
 
 // 高德 raster tiles are GCJ-02, the same datum as the POI coordinates, so markers line up without conversion.
 const TILES = "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
 
-/** Spots as colour-coded dots (green = 冷门). Leaflet touches `window`, so it is loaded client-side only. */
-export function SpotMap({ spots, selected, onSelect }: { spots: Spot[]; selected: string | null; onSelect: (poiId: string) => void }) {
+/** Places as colour-coded dots (green = high score). Leaflet touches `window`, so it is loaded client-side only. */
+export function SpotMap({ points, selected, onSelect }: { points: MapPoint[]; selected: string | null; onSelect: (id: string) => void }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<{ L: typeof import("leaflet"); map: LMap; layer: LayerGroup } | null>(null);
   const [ready, setReady] = useState(false);
@@ -40,26 +41,26 @@ export function SpotMap({ spots, selected, onSelect }: { spots: Spot[]; selected
     const cur = map.current;
     if (!ready || !cur) return;
     cur.layer.clearLayers();
-    for (const s of spots) {
-      const on = s.poiId === selected;
+    for (const s of points) {
+      const on = s.id === selected;
       cur.L.circleMarker([s.lat, s.lng], {
         radius: on ? 10 : 6,
         color: on ? "#111" : "#fff",
         weight: on ? 3 : 1,
-        fillColor: quietColor(s.quiet),
+        fillColor: scoreColor(s.score),
         fillOpacity: 0.9,
       })
-        .bindTooltip(`${s.name} · 冷门度 ${s.quiet}`)
-        .on("click", () => onSelectRef.current(s.poiId))
+        .bindTooltip(s.label)
+        .on("click", () => onSelectRef.current(s.id))
         .addTo(cur.layer);
     }
-  }, [ready, spots, selected]);
+  }, [ready, points, selected]);
 
   // Fly to a spot picked from the list.
   useEffect(() => {
-    const s = spots.find((x) => x.poiId === selected);
+    const s = points.find((x) => x.id === selected);
     if (s && ready && map.current) map.current.map.flyTo([s.lat, s.lng], Math.max(map.current.map.getZoom(), 11), { duration: 0.6 });
-  }, [ready, selected, spots]);
+  }, [ready, selected, points]);
 
   return <div ref={el} className="isolate h-[45dvh] min-h-64 w-full overflow-hidden rounded-2xl border border-line" />;
 }
