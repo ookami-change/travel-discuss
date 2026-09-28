@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { quietColor, SpotMap } from "@/components/spot-map";
-import { Card, ErrorText, PageHeader, Select, useAsync } from "@/components/ui";
+import { Button, Card, ErrorText, PageHeader, Select, Sheet, useAsync } from "@/components/ui";
 import { api, useApi } from "@/lib/client";
 import { AMENITY_RADIUS, isHiddenGem, type Spot } from "@/lib/explore";
+
+type ScanTarget = { adcode: string; name: string; fetchedAt: string | null };
 
 type ExploreData = {
   regions: { province: string; cities: { adcode: string; name: string; fetchedAt: string | null; stale: boolean }[] }[];
@@ -21,6 +23,8 @@ export default function Explore() {
   const [minQuiet, setMinQuiet] = useState(0);
   const [gemsOnly, setGemsOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  // Scans burn ~200 高德 calls, so every scan goes through a confirm dialog.
+  const [confirming, setConfirming] = useState<ScanTarget | null>(null);
 
   const scanned = useMemo(() => data?.regions.flatMap((r) => r.cities).filter((c) => c.fetchedAt) ?? [], [data]);
   const spots = useMemo(
@@ -65,7 +69,7 @@ export default function Explore() {
                 <button
                   key={c.adcode}
                   disabled={scan.busy}
-                  onClick={() => (c.fetchedAt ? setCity(c.name) : runScan(c.adcode, c.name))}
+                  onClick={() => (c.fetchedAt ? setCity(c.name) : setConfirming(c))}
                   className={`h-8 rounded-full border px-3 text-sm transition disabled:opacity-50 ${
                     city === c.name ? "border-accent bg-accent text-accent-fg" : c.fetchedAt ? "border-accent/40 bg-accent-soft" : "border-line bg-card text-muted"
                   }`}
@@ -80,7 +84,7 @@ export default function Explore() {
           </div>
         ))}
         {current && !scanning && (
-          <button disabled={scan.busy} onClick={() => runScan(current.adcode, current.name, true)} className="text-sm text-accent hover:underline disabled:opacity-50">
+          <button disabled={scan.busy} onClick={() => setConfirming(current)} className="text-sm text-accent hover:underline disabled:opacity-50">
             ↻ 重新扫描{current.name}
             {current.fetchedAt && <span className="text-muted">（上次 {new Date(current.fetchedAt).toLocaleDateString()}）</span>}
           </button>
@@ -131,6 +135,30 @@ export default function Explore() {
           </div>
         </>
       )}
+      <Sheet open={!!confirming} onClose={() => setConfirming(null)} title={confirming?.fetchedAt ? `重新扫描${confirming.name}？` : `扫描${confirming?.name}？`}>
+        {confirming && (
+          <div className="space-y-4">
+            <div className="space-y-1.5 text-sm text-muted">
+              {confirming.fetchedAt && <p>上次扫描：{new Date(confirming.fetchedAt).toLocaleDateString()}。重新扫描会用新结果覆盖它。</p>}
+              <p>大约需要 1 分钟，会调用约 200 次高德接口，占用当天的免费额度。</p>
+              <p>为了保护额度，页面上每小时最多扫 6 次，全站每天最多 20 次。</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => setConfirming(null)}>
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  runScan(confirming.adcode, confirming.name, !!confirming.fetchedAt);
+                  setConfirming(null);
+                }}
+              >
+                开始扫描
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </main>
   );
 }
