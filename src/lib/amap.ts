@@ -72,10 +72,14 @@ export type ScenicPoi = {
   rating: number | null;
 };
 
+/** 纪念馆 / 教堂 / 回教寺 — 高德 files them under 风景名胜 but they are rarely a trip destination. */
+const NOT_DESTINATION = new Set(["110204", "110206", "110207"]);
+const MAX_PAGES = 8;
+
 /** 风景名胜 (typecode 1102xx) POIs in a city, via 高德「搜索 POI 2.0」, ranked the way 高德 ranks them. */
 export async function scenicPois(adcode: string, max: number): Promise<ScenicPoi[]> {
   const out: ScenicPoi[] = [];
-  for (let page = 1; out.length < max; page++) {
+  for (let page = 1; out.length < max && page <= MAX_PAGES; page++) {
     const data = await amapGet<{
       status: string;
       info: string;
@@ -92,11 +96,15 @@ export async function scenicPois(adcode: string, max: number): Promise<ScenicPoi
     for (const p of pois) {
       const loc = str(p.location)?.split(",").map(Number);
       if (!loc || !Number.isFinite(loc[0]) || !Number.isFinite(loc[1])) continue;
+      const typecode = str(p.typecode) ?? "";
+      if (NOT_DESTINATION.has(typecode.split("|")[0])) continue;
+      // "古龙山大峡谷-漂流" style entries are parts of a scenic area that is listed on its own.
+      if (p.name.includes("-")) continue;
       const rating = Number(str(p.business?.rating));
       out.push({
         poiId: p.id,
         name: p.name,
-        typecode: str(p.typecode) ?? "",
+        typecode,
         type: str(p.type) ?? "",
         district: str(p.adname),
         address: str(p.address),
@@ -121,24 +129,4 @@ export async function amenityCount(lng: number, lat: number, radius: number): Pr
   });
   const n = Number(data.count);
   return Number.isFinite(n) ? n : 0;
-}
-
-export type TrafficNow = { status: string; description: string | null; expedite: string | null; congested: string | null; blocked: string | null };
-
-/** Live road congestion around a point (高德「交通态势」圆形区域). */
-export async function trafficAround(lng: number, lat: number): Promise<TrafficNow> {
-  const data = await amapGet<{
-    status: string;
-    info: string;
-    trafficinfo?: { description?: unknown; evaluation?: { status?: unknown; expedite?: unknown; congested?: unknown; blocked?: unknown } };
-  }>("/v3/traffic/status/circle", { location: `${lng.toFixed(6)},${lat.toFixed(6)}`, radius: "1500", level: "5" });
-  const ev = data.trafficinfo?.evaluation;
-  return {
-    // 0 未知, 1 畅通, 2 缓行, 3 拥堵
-    status: str(ev?.status) ?? "0",
-    description: str(data.trafficinfo?.description),
-    expedite: str(ev?.expedite),
-    congested: str(ev?.congested),
-    blocked: str(ev?.blocked),
-  };
 }

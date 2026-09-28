@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { quietColor, SpotMap } from "@/components/spot-map";
-import { Button, Card, ErrorText, PageHeader, Select, useAsync } from "@/components/ui";
-import type { TrafficNow } from "@/lib/amap";
+import { Card, ErrorText, PageHeader, Select, useAsync } from "@/components/ui";
 import { api, useApi } from "@/lib/client";
 import { AMENITY_RADIUS, isHiddenGem, type Spot } from "@/lib/explore";
 
@@ -12,7 +11,6 @@ type ExploreData = {
   spots: Spot[];
 };
 
-const TRAFFIC_LABEL: Record<string, string> = { "0": "未知", "1": "畅通", "2": "缓行", "3": "拥堵" };
 const LIST_LIMIT = 60;
 
 export default function Explore() {
@@ -139,8 +137,6 @@ function Legend({ q, label }: { q: number; label: string }) {
 }
 
 function SpotCard({ spot: s, selected, onSelect }: { spot: Spot; selected: boolean; onSelect: () => void }) {
-  const traffic = useAsync();
-  const [now, setNow] = useState<TrafficNow | null>(null);
   const amap = `https://uri.amap.com/marker?position=${s.lng},${s.lat}&name=${encodeURIComponent(s.name)}&src=travel-discuss&coordinate=gaode&callnative=1`;
 
   return (
@@ -157,30 +153,14 @@ function SpotCard({ spot: s, selected, onSelect }: { spot: Spot; selected: boole
             </p>
             <p className="truncate text-xs text-muted">
               {s.city}
-              {s.district && s.district !== s.city && ` · ${s.district}`} · {s.type.split(";").pop()}
+              {s.district && s.district !== s.city && ` · ${s.district}`} · {s.type.split("|")[0].split(";").pop()}
             </p>
             <p className="mt-0.5 text-xs text-muted">
               周边餐饮住宿 {s.amenities} 家{s.rating && ` · 评分 ${s.rating}`}
             </p>
-            {now && (
-              <p className="mt-1 text-xs">
-                周边路况：<b>{TRAFFIC_LABEL[now.status] ?? "未知"}</b>
-                {now.congested && ` · 拥堵 ${now.congested}`}
-                {now.description && <span className="block text-muted">{now.description}</span>}
-              </p>
-            )}
-            <ErrorText error={traffic.error} />
           </div>
         </div>
         <div className="mt-2 flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button
-            size="sm"
-            variant="ghost"
-            busy={traffic.busy}
-            onClick={() => traffic.run(async () => setNow(await api<TrafficNow>("GET", `/api/explore/traffic?lng=${s.lng}&lat=${s.lat}`)))}
-          >
-            现在路况
-          </Button>
           <a href={amap} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center rounded-xl border border-line bg-card px-3 text-sm font-medium hover:bg-bg">
             在高德打开
           </a>
