@@ -43,17 +43,30 @@ function amapKey() {
   return key;
 }
 
-/** GET a 高德 Web 服务 endpoint; retries briefly when the per-second quota is hit. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// The personal key's QPS cap is low, so space out request starts process-wide.
+const MIN_GAP_MS = 350;
+let nextSlot = 0;
+async function throttle() {
+  const now = Date.now();
+  const at = Math.max(now, nextSlot);
+  nextSlot = at + MIN_GAP_MS;
+  if (at > now) await sleep(at - now);
+}
+
+/** GET a 高德 Web 服务 endpoint; backs off and retries when the per-second quota is hit. */
 async function amapGet<T extends { status: string; info: string; infocode?: string }>(path: string, params: Record<string, string>): Promise<T> {
   const url = new URL(`https://restapi.amap.com${path}`);
   url.searchParams.set("key", amapKey());
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   for (let attempt = 0; ; attempt++) {
+    await throttle();
     const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     const data = (await res.json()) as T;
     if (data.status === "1") return data;
-    if (data.info.includes("QPS") && attempt < 3) {
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    if (data.info.includes("QPS") && attempt < 6) {
+      await sleep(1000 * 2 ** Math.min(attempt, 3));
       continue;
     }
     throw new HttpError(502, `高德接口失败：${data.info}`);
