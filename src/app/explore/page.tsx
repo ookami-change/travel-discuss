@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { scoreColor, SpotMap } from "@/components/spot-map";
+import { scoreColor, SpotMap, type Rings } from "@/components/spot-map";
 import { Button, Card, ErrorText, PageHeader, Select, Sheet, useAsync } from "@/components/ui";
 import { api, useApi } from "@/lib/client";
-import { AMENITY_RADIUS, FOOD_RADIUS, GOOD_FOOD, isHiddenGem, type Spot, type StayView } from "@/lib/explore";
+import { AMENITY_RADIUS, FOOD_RADIUS, GOOD_FOOD, isHiddenGem, isLeisureStay, LEISURE_BONUS, type Spot, type StayView } from "@/lib/explore";
 
 type Mode = "spots" | "stays";
 type City = { adcode: string; name: string; fetchedAt: string | null; stale: boolean };
 type ExploreData<T> = { regions: { province: string; cities: City[] }[]; items: T[] };
 
 /** What the map and list show, whichever mode produced it. */
-type Item = { id: string; name: string; city: string; lat: number; lng: number; score: number; gem: boolean; lines: string[] };
+type Item = { id: string; name: string; city: string; lat: number; lng: number; score: number; badge: string | null; lines: string[] };
 
 const MODES = {
   spots: {
@@ -21,14 +21,16 @@ const MODES = {
     intro: `点城市扫描它的风景名胜、公园和自然保护区。冷门度看的是景点周边 ${AMENITY_RADIUS / 1000}km 内餐馆和酒店有多少：配套越少，游客通常越少；世界遗产、国家级景点再额外扣分。标「旧」的城市是按旧规则扫的（不含公园和保护区），选中后可以重新扫描。`,
     cost: "大约 1 分钟，会调用约 200 次高德接口",
     legend: ["冷门 ≥70", "一般 40–69", "热门 <40"],
+    badge: { icon: "💎", filter: "只看宝藏", note: "冷门且评分 ≥4.5" },
   },
   stays: {
     tab: "休闲好去处",
     scoreName: "休闲指数",
     noun: "个去处",
-    intro: `不是景点，而是适合住下来放松的地方：评分 4.5 以上的酒店，${FOOD_RADIUS / 1000}km 内好吃的多，离景点越远越好。休闲指数 = 酒店评分 30% + 周边美食 35% + 离最近景点的距离 35%（8km 以上满分）。距离只算「冷门景点」里扫过、评分 4.0 以上的风景名胜（寺庙要 4.5 以上，村里的小庙不算），那边扫得越全越准。`,
+    intro: `不是景点，而是适合住下来放松的地方：评分 4.5 以上的酒店，${FOOD_RADIUS / 1000}km 内好吃的多，离景点越远越好。休闲指数 = 酒店评分 30% + 周边美食 35% + 离最近景点的距离 35%（8km 以上满分）；民宿、度假、温泉、山庄这类再加 ${LEISURE_BONUS} 分。距离只算「冷门景点」里扫过、评分 4.0 以上的风景名胜（寺庙要 4.5 以上，村里的小庙不算），那边扫得越全越准。`,
     cost: "大约 40 秒，会调用约 90 次高德接口",
     legend: ["很好 ≥70", "一般 40–69", "较差 <40"],
+    badge: { icon: "🏡", filter: "只看休闲型", note: `民宿、度假、温泉、山庄等 +${LEISURE_BONUS}` },
   },
 } as const;
 
@@ -44,7 +46,7 @@ function spotItem(s: Spot): Item {
     lat: s.lat,
     lng: s.lng,
     score: s.quiet,
-    gem: isHiddenGem(s),
+    badge: isHiddenGem(s) ? "💎" : null,
     lines: [place(s.city, s.district, s.type.split("|")[0].split(";").pop() ?? ""), `周边餐饮住宿 ${s.amenities} 家${s.rating ? ` · 评分 ${s.rating}` : ""}`],
   };
 }
@@ -58,7 +60,7 @@ function stayItem(s: StayView): Item {
     lat: s.lat,
     lng: s.lng,
     score: s.score,
-    gem: false,
+    badge: isLeisureStay(s) ? "🏡" : null,
     lines: [
       place(s.city, s.district, `酒店评分 ${s.rating}`),
       f.count === 0
@@ -79,8 +81,11 @@ export default function Explore() {
   const [scanning, setScanning] = useState<string | null>(null);
   const [city, setCity] = useState("all");
   const [minScore, setMinScore] = useState(0);
-  const [gemsOnly, setGemsOnly] = useState(false);
+  const [badgeOnly, setBadgeOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredCity, setHoveredCity] = useState<string | null>(null);
+  const { data: bounds } = useApi<Record<string, Rings>>("/explore-bounds.json", { revalidateOnFocus: false });
   // Scans burn 高德 quota, so every scan goes through a confirm dialog.
   const [confirming, setConfirming] = useState<City | null>(null);
 
@@ -89,13 +94,16 @@ export default function Explore() {
     () =>
       (data?.items ?? [])
         .map((x) => (mode === "stays" ? stayItem(x as StayView) : spotItem(x as Spot)))
-        .filter((x) => (city === "all" || x.city === city) && x.score >= minScore && (mode !== "spots" || !gemsOnly || x.gem))
+        .filter((x) => (city === "all" || x.city === city) && x.score >= minScore && (!badgeOnly || x.badge))
         .sort((a, b) => b.score - a.score),
-    [data, mode, city, minScore, gemsOnly],
+    [data, mode, city, minScore, badgeOnly],
   );
   const points = useMemo(() => items.map((x) => ({ id: x.id, lat: x.lat, lng: x.lng, score: x.score, label: `${x.name} · ${m.scoreName} ${x.score}` })), [items, m]);
 
   const current = scanned.find((c) => c.name === city);
+  // Hovering a city name outlines it; otherwise the picked city stays outlined (and is what touch screens get).
+  const fit = (current && bounds?.[current.adcode]) || null;
+  const outline = (hoveredCity && bounds?.[hoveredCity]) || fit;
   const runScan = (target: City) =>
     scan.run(async () => {
       setScanning(target.name);
@@ -112,6 +120,7 @@ export default function Explore() {
     setMode(next);
     setSelected(null);
     setMinScore(0);
+    setBadgeOnly(false);
   };
 
   // Keep the picked place's card in view when it was chosen on the map.
@@ -149,6 +158,10 @@ export default function Explore() {
                   key={c.adcode}
                   disabled={scan.busy}
                   onClick={() => (c.fetchedAt ? setCity(c.name) : setConfirming(c))}
+                  onMouseEnter={() => setHoveredCity(c.adcode)}
+                  onMouseLeave={() => setHoveredCity(null)}
+                  onFocus={() => setHoveredCity(c.adcode)}
+                  onBlur={() => setHoveredCity(null)}
                   className={`h-8 rounded-full border px-3 text-sm transition disabled:opacity-50 ${
                     city === c.name ? "border-accent bg-accent text-accent-fg" : c.fetchedAt ? "border-accent/40 bg-accent-soft" : "border-line bg-card text-muted"
                   }`}
@@ -190,21 +203,21 @@ export default function Explore() {
               </span>
               <input type="range" min={0} max={90} step={10} value={minScore} onChange={(e) => setMinScore(+e.target.value)} className="w-full accent-[var(--accent)]" />
             </label>
-            {mode === "spots" && (
-              <label className="flex h-9 items-center gap-1.5 text-sm">
-                <input type="checkbox" checked={gemsOnly} onChange={(e) => setGemsOnly(e.target.checked)} />
-                只看宝藏 💎
-              </label>
-            )}
+            <label className="flex h-9 items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={badgeOnly} onChange={(e) => setBadgeOnly(e.target.checked)} />
+              {m.badge.filter} {m.badge.icon}
+            </label>
           </div>
 
           <div className="mt-3">
-            <SpotMap points={points} selected={selected} onSelect={setSelected} />
+            <SpotMap points={points} selected={selected} hovered={hovered} onSelect={setSelected} outline={outline} fit={fit} />
             <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
               <Legend q={80} label={m.legend[0]} />
               <Legend q={50} label={m.legend[1]} />
               <Legend q={0} label={m.legend[2]} />
-              {mode === "spots" && <span className="whitespace-nowrap sm:ml-auto">💎 = 冷门且评分 ≥4.5</span>}
+              <span className="whitespace-nowrap sm:ml-auto">
+                {m.badge.icon} = {m.badge.note}
+              </span>
             </p>
           </div>
 
@@ -214,7 +227,7 @@ export default function Explore() {
           </p>
           <div className="mt-2 space-y-2">
             {items.slice(0, LIST_LIMIT).map((x) => (
-              <PlaceCard key={x.id} item={x} scoreName={m.scoreName} selected={x.id === selected} onSelect={() => setSelected(x.id)} />
+              <PlaceCard key={x.id} item={x} scoreName={m.scoreName} selected={x.id === selected} onSelect={() => setSelected(x.id)} onHover={setHovered} />
             ))}
           </div>
         </>
@@ -261,11 +274,23 @@ function Legend({ q, label }: { q: number; label: string }) {
   );
 }
 
-function PlaceCard({ item: x, scoreName, selected, onSelect }: { item: Item; scoreName: string; selected: boolean; onSelect: () => void }) {
+function PlaceCard({
+  item: x,
+  scoreName,
+  selected,
+  onSelect,
+  onHover,
+}: {
+  item: Item;
+  scoreName: string;
+  selected: boolean;
+  onSelect: () => void;
+  onHover: (id: string | null) => void;
+}) {
   const amap = `https://uri.amap.com/marker?position=${x.lng},${x.lat}&name=${encodeURIComponent(x.name)}&src=travel-discuss&coordinate=gaode&callnative=1`;
 
   return (
-    <div id={`place-${x.id}`} onClick={onSelect}>
+    <div id={`place-${x.id}`} onClick={onSelect} onMouseEnter={() => onHover(x.id)} onMouseLeave={() => onHover(null)}>
       <Card className={`cursor-pointer p-3 ${selected ? "border-accent ring-2 ring-accent/20" : ""}`}>
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl text-white" style={{ background: scoreColor(x.score) }}>
@@ -274,7 +299,7 @@ function PlaceCard({ item: x, scoreName, selected, onSelect }: { item: Item; sco
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-medium">
-              {x.name} {x.gem && "💎"}
+              {x.name} {x.badge}
             </p>
             {x.lines.map((line, i) => (
               <p key={i} className={`text-xs text-muted ${i === 0 ? "truncate" : "mt-0.5"}`}>

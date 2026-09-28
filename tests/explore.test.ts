@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAttraction, isHiddenGem, nearestWithin, quietScore, stayScore } from "@/lib/explore";
+import { isAttraction, isHiddenGem, isLeisureStay, nearestWithin, quietScore, stayScore } from "@/lib/explore";
 
 describe("quietScore", () => {
   it("is 100 with no amenities and falls on a log scale", () => {
@@ -26,15 +26,23 @@ it("hidden gem needs both quiet and a good rating", () => {
 
 describe("stayScore", () => {
   const food = (avg: number | null, good: number) => ({ count: 100, avg, good });
+  const name = "某某商务酒店";
 
   it("weights hotel 30, food 35, distance 35", () => {
-    expect(stayScore({ rating: 5, food: food(4.2, 5) }, 8)).toBe(100);
-    expect(stayScore({ rating: 4, food: food(3, 0) }, 0)).toBe(0);
-    expect(stayScore({ rating: 4.5, food: food(3.6, 2) }, 4)).toBe(48); // 15 + 35 × (0.5 × 0.5 + 0.5 × 0.4) + 35 × 0.5 = 48.25
+    expect(stayScore({ name, rating: 5, food: food(4.2, 5) }, 8)).toBe(100);
+    expect(stayScore({ name, rating: 4, food: food(3, 0) }, 0)).toBe(0);
+    expect(stayScore({ name, rating: 4.5, food: food(3.6, 2) }, 4)).toBe(48); // 15 + 35 × (0.5 × 0.5 + 0.5 × 0.4) + 35 × 0.5 = 48.25
+  });
+
+  it("adds the leisure bonus for 民宿/温泉… names, capped at 100", () => {
+    expect(isLeisureStay({ name: "峒牌新颖民宿" })).toBe(true);
+    expect(isLeisureStay({ name: "城市便捷酒店(鹿寨步行街店)" })).toBe(false);
+    expect(stayScore({ name: "山里温泉度假村", rating: 4.5, food: food(3.6, 2) }, 4)).toBe(48 + 15);
+    expect(stayScore({ name: "某某民宿", rating: 5, food: food(4.2, 5) }, 8)).toBe(100);
   });
 
   it("scores unrated food as zero and unknown distance as half", () => {
-    expect(stayScore({ rating: 5, food: food(null, 0) }, null)).toBe(30 + 18);
+    expect(stayScore({ name, rating: 5, food: food(null, 0) }, null)).toBe(30 + 18);
   });
 });
 
