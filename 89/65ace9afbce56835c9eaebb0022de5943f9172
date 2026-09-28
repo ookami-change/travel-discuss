@@ -1,0 +1,19 @@
+src/lib/amap.ts
+  s_48bf5c2e5c516b::t_1f4589067df3ac 46-58,64,68-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "8965ace9afbce56835c9eaebb0022de5943f9172",
+  "prompts": {},
+  "sessions": {
+    "s_48bf5c2e5c516b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d2215d6-cc5b-4ef9-afd6-fcef77f04719",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "hanchenggang.4869 <hanchenggang.4869@jd.com>"
+    }
+  }
+}
